@@ -21,21 +21,39 @@ Backend API for the POS Billing System, built with Node.js, Express, and Postgre
 backend/
 ├── src/
 │   ├── config/database.js
-│   ├── controllers/authController.js
+│   ├── controllers/
+│   │   ├── authController.js
+│   │   ├── categoryController.js
+│   │   ├── productController.js
+│   │   └── unitController.js
 │   ├── db/
 │   │   ├── migrations/
 │   │   │   ├── 001_create_users.sql
 │   │   │   ├── 002_create_sessions.sql
 │   │   │   ├── 003_create_email_otp_challenges.sql
-│   │   │   └── 004_create_password_reset_tokens.sql
+│   │   │   ├── 004_create_password_reset_tokens.sql
+│   │   │   ├── 005_create_product_management.sql
+│   │   │   └── 006_add_bilingual_names.sql
 │   │   └── seedAdmin.js
 │   ├── middleware/authMiddleware.js
-│   ├── routes/authRoutes.js
+│   ├── routes/
+│   │   ├── authRoutes.js
+│   │   ├── categoryRoutes.js
+│   │   ├── productRoutes.js
+│   │   └── unitRoutes.js
 │   ├── services/
 │   │   ├── authService.js
+│   │   ├── categoryService.js
 │   │   ├── emailService.js
 │   │   ├── otpService.js
-│   │   └── sessionService.js
+│   │   ├── passwordResetService.js
+│   │   ├── productService.js
+│   │   ├── sessionService.js
+│   │   └── unitService.js
+│   ├── utils/
+│   │   ├── databaseErrors.js
+│   │   ├── productValidation.js
+│   │   └── referenceValidation.js
 │   └── app.js
 ├── .env
 ├── .gitignore
@@ -63,6 +81,8 @@ psql -d pos_billing -f src/db/migrations/001_create_users.sql
 psql -d pos_billing -f src/db/migrations/002_create_sessions.sql
 psql -d pos_billing -f src/db/migrations/003_create_email_otp_challenges.sql
 psql -d pos_billing -f src/db/migrations/004_create_password_reset_tokens.sql
+psql -d pos_billing -f src/db/migrations/005_create_product_management.sql
+psql -d pos_billing -f src/db/migrations/006_add_bilingual_names.sql
 ```
 
 Current tables:
@@ -72,6 +92,9 @@ users
 sessions
 email_otp_challenges
 password_reset_tokens
+categories
+units
+products
 ```
 
 ### Environment
@@ -282,6 +305,135 @@ A successful reset:
 6. Invalidates all existing sessions.
 7. Invalidates remaining OTP challenges.
 
+## Product Management
+
+The backend provides APIs for managing:
+
+- Categories
+- Units
+- Products
+
+Product, category, and unit read operations require authentication.
+
+Create, update, and delete operations require administrator access.
+
+### Categories
+
+```http
+GET    /api/categories
+GET    /api/categories/:id
+POST   /api/categories
+PATCH  /api/categories/:id
+DELETE /api/categories/:id
+```
+
+Create category:
+
+```json
+{
+  "nameEn": "Cement",
+  "nameHi": "सीमेंट"
+}
+```
+
+English category names are required. Hindi names are optional.
+
+### Units
+
+```http
+GET    /api/units
+GET    /api/units/:id
+POST   /api/units
+PATCH  /api/units/:id
+DELETE /api/units/:id
+```
+
+Create unit:
+
+```json
+{
+  "nameEn": "Kilogram",
+  "nameHi": "किलोग्राम",
+  "shortName": "kg",
+  "type": "weight"
+}
+```
+
+English unit names are required. Hindi names are optional.
+
+`shortName` and `type` remain single fields.
+
+### Products
+
+```http
+GET    /api/products
+GET    /api/products/:id
+POST   /api/products
+PATCH  /api/products/:id
+DELETE /api/products/:id
+```
+
+Create product:
+
+```json
+{
+  "nameEn": "OPC 53 Grade Cement",
+  "nameHi": "ओपीसी 53 ग्रेड सीमेंट",
+  "categoryId": 1,
+  "unitId": 1,
+  "brand": "UltraTech"
+}
+```
+
+Each product has one ID and one database row.
+
+The product stores:
+
+```text
+name_en
+name_hi
+category_id
+unit_id
+brand
+status
+```
+
+Brand remains a single field.
+
+### Product Search
+
+Product search supports:
+
+- English product names
+- Hindi product names
+- Brand names
+
+Examples:
+
+```http
+GET /api/products?search=cement
+```
+
+```http
+GET /api/products?search=सीमेंट
+```
+
+### Category Filtering
+
+```http
+GET /api/products?categoryId=1
+```
+
+### Soft Deletion
+
+Delete operations do not physically remove products, categories, or units.
+
+Instead, the resource status is changed to:
+
+```text
+inactive
+```
+
 ## Security
 
 ### Passwords
@@ -318,6 +470,10 @@ Reset tokens:
 
 After a successful password reset, all existing sessions for that user are deleted.
 
+### Authorization
+
+Product, category, and unit modifications require administrator authorization.
+
 ## Email
 
 Password-reset OTP emails are sent using Nodemailer and SMTP.
@@ -344,6 +500,7 @@ PHONE_ALREADY_EXISTS
 INVALID_CREDENTIALS
 ACCOUNT_DISABLED
 UNAUTHORIZED
+FORBIDDEN
 INVALID_OTP
 OTP_EXPIRED
 OTP_MAX_ATTEMPTS
@@ -354,6 +511,24 @@ RESET_TOKEN_USED
 INVALID_PASSWORD
 NETWORK_ERROR
 UNKNOWN_ERROR
+```
+
+Product management also uses structured errors such as:
+
+```text
+PRODUCT_NOT_FOUND
+PRODUCT_ID_INVALID
+PRODUCT_NAME_EN_REQUIRED
+PRODUCT_NAME_EN_INVALID
+PRODUCT_NAME_HI_INVALID
+CATEGORY_NOT_FOUND
+CATEGORY_ID_INVALID
+UNIT_NOT_FOUND
+UNIT_ID_INVALID
+BRAND_INVALID
+STATUS_INVALID
+DUPLICATE_RESOURCE
+INVALID_REFERENCE
 ```
 
 ## CORS
@@ -368,22 +543,30 @@ For production, set this to the actual frontend origin.
 
 ## Testing with cURL
 
+### Authentication
+
 Request OTP:
 
 ```bash
-curl -X POST http://localhost:5001/api/auth/password-reset/request   -H "Content-Type: application/json"   -d '{"email":"admin@example.com"}'
+curl -X POST http://localhost:5001/api/auth/password-reset/request \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@example.com"}'
 ```
 
 Verify OTP:
 
 ```bash
-curl -X POST http://localhost:5001/api/auth/password-reset/verify   -H "Content-Type: application/json"   -d '{"email":"admin@example.com","otp":"123456"}'
+curl -X POST http://localhost:5001/api/auth/password-reset/verify \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@example.com","otp":"123456"}'
 ```
 
 Confirm password reset:
 
 ```bash
-curl -X POST http://localhost:5001/api/auth/password-reset/confirm   -H "Content-Type: application/json"   -d '{"resetToken":"YOUR_RESET_TOKEN","newPassword":"NewPassword@123"}'
+curl -X POST http://localhost:5001/api/auth/password-reset/confirm \
+  -H "Content-Type: application/json" \
+  -d '{"resetToken":"YOUR_RESET_TOKEN","newPassword":"NewPassword@123"}'
 ```
 
 Never commit real passwords, OTPs, reset tokens, SMTP credentials, or other secrets.
@@ -410,6 +593,9 @@ Express API
         ├── Session Service
         ├── OTP Service
         ├── Email Service
+        ├── Product Service
+        ├── Category Service
+        ├── Unit Service
         └── Authentication Middleware
         │
         ▼
@@ -417,10 +603,38 @@ PostgreSQL
         ├── users
         ├── sessions
         ├── email_otp_challenges
-        └── password_reset_tokens
+        ├── password_reset_tokens
+        ├── categories
+        ├── units
+        └── products
+```
+
+## Product Management Architecture
+
+```text
+React + Vite Frontend
+        │
+        │ HTTP / JSON
+        ▼
+Express API
+        │
+        ├── Product Controller
+        ├── Product Service
+        ├── Category Controller
+        ├── Category Service
+        ├── Unit Controller
+        └── Unit Service
+        │
+        ▼
+PostgreSQL
+        ├── categories
+        ├── units
+        └── products
 ```
 
 ## Current Status
+
+### Authentication
 
 - [x] User signup
 - [x] Admin seeding
@@ -442,6 +656,28 @@ PostgreSQL
 - [x] Password reset
 - [x] Session invalidation after password reset
 
+### Product Management
+
+- [x] Product database schema
+- [x] Category management API
+- [x] Unit management API
+- [x] Product management API
+- [x] Product search
+- [x] Category filtering
+- [x] Soft deletion
+- [x] Admin-only product management
+- [x] English/Hindi product names
+- [x] English/Hindi category names
+- [x] English/Hindi unit names
+- [x] Single ID and row for each bilingual resource
+
+### Catalogue
+
+- [ ] Final product catalogue
+- [ ] Product catalogue import/seed
+
+The actual product catalogue will be finalized and imported separately.
+
 ## Future Production Improvements
 
 - Automated database migrations
@@ -453,6 +689,7 @@ PostgreSQL
 - Automated tests
 - Production logging and monitoring
 - Backup and recovery strategy
+- Production deployment
 
 ## License
 

@@ -5,6 +5,9 @@ import cookieParser from "cookie-parser";
 
 import { query } from "./config/database.js";
 import authRoutes from "./routes/authRoutes.js";
+import productRoutes from "./routes/productRoutes.js";
+import categoryRoutes from "./routes/categoryRoutes.js";
+import unitRoutes from "./routes/unitRoutes.js";
 
 
 dotenv.config();
@@ -24,6 +27,9 @@ app.use(express.json());
 app.use(cookieParser());
 
 app.use("/api/auth", authRoutes);
+app.use("/api/products", productRoutes);
+app.use("/api/categories", categoryRoutes);
+app.use("/api/units", unitRoutes);
 
 app.get("/api/health", async (req, res) => {
   try {
