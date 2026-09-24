@@ -1,6 +1,29 @@
 # POS Billing System — Backend
 
-Backend API for the POS Billing System, built with Node.js, Express, and PostgreSQL.
+Backend API for the POS Billing System. It provides authentication, session management, password reset, product/category/unit management, product search, bilingual product data, and the hardware-product catalogue used by the React + Vite frontend.
+
+## Project Status
+
+The backend currently includes:
+
+- User authentication with session-based login
+- Admin authorization
+- Password reset flow
+- Product CRUD
+- Category CRUD
+- Unit CRUD
+- Product search and filtering
+- Soft-delete support through product/category/unit status
+- English and Hindi product names
+- Bihar hardware/building-material product catalogue
+- Seed data for units
+- PostgreSQL database
+- CORS configuration for the frontend
+- Email support for authentication/password-reset flows
+
+The application is currently being developed for a small POS deployment. The product catalogue seed is intended for development and initial setup, not production data migration.
+
+---
 
 ## Tech Stack
 
@@ -8,19 +31,24 @@ Backend API for the POS Billing System, built with Node.js, Express, and Postgre
 - Express.js
 - PostgreSQL
 - `pg`
-- Argon2
-- Nodemailer
-- Cookie Parser
-- CORS
+- JavaScript
+- Session-based authentication
+- bcrypt/password hashing
+- Nodemailer/email service
 - dotenv
-- Nodemon
+- CORS
+
+The frontend is a separate React + Vite application.
+
+---
 
 ## Project Structure
 
 ```text
 backend/
 ├── src/
-│   ├── config/database.js
+│   ├── config/
+│   │   └── database.js
 │   ├── controllers/
 │   │   ├── authController.js
 │   │   ├── categoryController.js
@@ -28,669 +56,847 @@ backend/
 │   │   └── unitController.js
 │   ├── db/
 │   │   ├── migrations/
-│   │   │   ├── 001_create_users.sql
+│   │   │   ├── 001_create_user.sql
 │   │   │   ├── 002_create_sessions.sql
-│   │   │   ├── 003_create_email_otp_challenges.sql
-│   │   │   ├── 004_create_password_reset_tokens.sql
+│   │   │   ├── 003_create_password_reset_token.sql
+│   │   │   ├── 004_create_email_otp_challenges.sql
 │   │   │   ├── 005_create_product_management.sql
-│   │   │   └── 006_add_bilingual_names.sql
+│   │   │   ├── 006_add_bilingual_names.sql
+│   │   │   ├── 007_seed_bihar_hardware_catalogue.sql
+│   │   │   └── 008_seed_units.sql
 │   │   └── seedAdmin.js
-│   ├── middleware/authMiddleware.js
 │   ├── routes/
-│   │   ├── authRoutes.js
-│   │   ├── categoryRoutes.js
-│   │   ├── productRoutes.js
-│   │   └── unitRoutes.js
+│   ├── middleware/
 │   ├── services/
-│   │   ├── authService.js
-│   │   ├── categoryService.js
-│   │   ├── emailService.js
-│   │   ├── otpService.js
-│   │   ├── passwordResetService.js
-│   │   ├── productService.js
-│   │   ├── sessionService.js
-│   │   └── unitService.js
-│   ├── utils/
-│   │   ├── databaseErrors.js
-│   │   ├── productValidation.js
-│   │   └── referenceValidation.js
-│   └── app.js
+│   └── server.js
 ├── .env
-├── .gitignore
 ├── package.json
-├── package-lock.json
 └── README.md
 ```
 
-## Setup
+---
 
-### Install dependencies
+# Database
 
-```bash
-npm install
-```
+The backend uses PostgreSQL.
 
-### PostgreSQL
+## Main Tables
 
-Create a database named `pos_billing`.
+### Users
 
-Run migrations in order:
+Stores application users and their roles.
 
-```bash
-psql -d pos_billing -f src/db/migrations/001_create_users.sql
-psql -d pos_billing -f src/db/migrations/002_create_sessions.sql
-psql -d pos_billing -f src/db/migrations/003_create_email_otp_challenges.sql
-psql -d pos_billing -f src/db/migrations/004_create_password_reset_tokens.sql
-psql -d pos_billing -f src/db/migrations/005_create_product_management.sql
-psql -d pos_billing -f src/db/migrations/006_add_bilingual_names.sql
-```
+### Sessions
 
-Current tables:
+Stores authenticated sessions used by the application.
 
-```text
-users
-sessions
-email_otp_challenges
-password_reset_tokens
-categories
-units
-products
-```
+### Password Reset Tokens
 
-### Environment
+Stores password-reset information.
 
-Create `backend/.env`:
+### Email OTP Challenges
 
-```env
-PORT=5001
-DATABASE_URL=postgresql://postgres:YOUR_PASSWORD@localhost:5432/pos_billing
-FRONTEND_URL=http://localhost:5173
-
-SESSION_DURATION_DAYS=7
-
-ADMIN_FIRST_NAME=Admin
-ADMIN_LAST_NAME=User
-ADMIN_PHONE=YOUR_PHONE
-ADMIN_EMAIL=admin@example.com
-ADMIN_PASSWORD=YOUR_ADMIN_PASSWORD
-
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=465
-SMTP_SECURE=true
-SMTP_CONNECT_HOST=YOUR_SMTP_IPV4
-SMTP_USER=yourgmail@gmail.com
-SMTP_PASSWORD=YOUR_GMAIL_APP_PASSWORD
-MAIL_FROM=POS Billing <yourgmail@gmail.com>
-
-OTP_HASH_SECRET=YOUR_RANDOM_SECRET
-OTP_EXPIRY_MINUTES=5
-OTP_MAX_ATTEMPTS=5
-OTP_COOLDOWN_SECONDS=60
-RESET_TOKEN_EXPIRY_MINUTES=10
-```
-
-Never commit `.env` or real credentials.
-
-Generate the OTP secret with:
-
-```bash
-openssl rand -hex 32
-```
-
-For Gmail SMTP, use an App Password.
-
-### Seed admin
-
-```bash
-npm run seed:admin
-```
-
-## Running
-
-Development:
-
-```bash
-npm run dev
-```
-
-Production:
-
-```bash
-npm start
-```
-
-Local API:
-
-```text
-http://localhost:5001
-```
-
-## Authentication API
-
-Base URL:
-
-```text
-http://localhost:5001/api
-```
-
-### Signup
-
-```http
-POST /auth/signup
-```
-
-Example:
-
-```json
-{
-  "firstName": "John",
-  "lastName": "Doe",
-  "phone": "+491234567890",
-  "email": "john@example.com",
-  "password": "Password@123"
-}
-```
-
-New users are created with `role=user` and `status=active`.
-
-### Login
-
-```http
-POST /auth/login
-```
-
-Successful login creates a server-side session and sends an HttpOnly cookie.
-
-### Current user
-
-```http
-GET /auth/me
-```
-
-Requires authentication.
-
-### Logout
-
-```http
-POST /auth/logout
-```
-
-Deletes the server-side session and clears the cookie.
-
-### Change password
-
-```http
-POST /auth/change-password
-```
-
-Requires authentication.
-
-## Password Reset
-
-Password reset uses email OTP verification followed by a short-lived, single-use reset token.
-
-```text
-Request reset
-     ↓
-Email OTP
-     ↓
-Verify OTP
-     ↓
-Receive reset token
-     ↓
-Submit new password
-     ↓
-Argon2 password hash
-     ↓
-Invalidate reset token
-     ↓
-Invalidate all existing sessions
-```
-
-### Request password reset
-
-```http
-POST /auth/password-reset/request
-```
-
-Example:
-
-```json
-{
-  "email": "john@example.com"
-}
-```
-
-The endpoint intentionally returns a generic response so it does not reveal whether an email address is registered.
-
-### Verify OTP
-
-```http
-POST /auth/password-reset/verify
-```
-
-Example:
-
-```json
-{
-  "email": "john@example.com",
-  "otp": "123456"
-}
-```
-
-Successful verification returns a temporary reset token.
-
-### Confirm password reset
-
-```http
-POST /auth/password-reset/confirm
-```
-
-Example:
-
-```json
-{
-  "resetToken": "RESET_TOKEN",
-  "newPassword": "NewPassword@123"
-}
-```
-
-A successful reset:
-
-1. Validates the reset token.
-2. Checks expiry and one-time-use status.
-3. Hashes the new password with Argon2.
-4. Updates the password.
-5. Marks the reset token as used.
-6. Invalidates all existing sessions.
-7. Invalidates remaining OTP challenges.
-
-## Product Management
-
-The backend provides APIs for managing:
-
-- Categories
-- Units
-- Products
-
-Product, category, and unit read operations require authentication.
-
-Create, update, and delete operations require administrator access.
+Supports email verification/OTP flows.
 
 ### Categories
 
-```http
-GET    /api/categories
-GET    /api/categories/:id
-POST   /api/categories
-PATCH  /api/categories/:id
-DELETE /api/categories/:id
+```text
+id
+name_en
+name_hi
+status
+created_at
+updated_at
 ```
-
-Create category:
-
-```json
-{
-  "nameEn": "Cement",
-  "nameHi": "सीमेंट"
-}
-```
-
-English category names are required. Hindi names are optional.
 
 ### Units
 
-```http
-GET    /api/units
-GET    /api/units/:id
-POST   /api/units
-PATCH  /api/units/:id
-DELETE /api/units/:id
+```text
+id
+name_en
+name_hi
+short_name
+type
+status
+created_at
+updated_at
 ```
-
-Create unit:
-
-```json
-{
-  "nameEn": "Kilogram",
-  "nameHi": "किलोग्राम",
-  "shortName": "kg",
-  "type": "weight"
-}
-```
-
-English unit names are required. Hindi names are optional.
-
-`shortName` and `type` remain single fields.
 
 ### Products
 
-```http
-GET    /api/products
-GET    /api/products/:id
-POST   /api/products
-PATCH  /api/products/:id
-DELETE /api/products/:id
-```
-
-Create product:
-
-```json
-{
-  "nameEn": "OPC 53 Grade Cement",
-  "nameHi": "ओपीसी 53 ग्रेड सीमेंट",
-  "categoryId": 1,
-  "unitId": 1,
-  "brand": "UltraTech"
-}
-```
-
-Each product has one ID and one database row.
-
-The product stores:
-
 ```text
+id
 name_en
 name_hi
 category_id
 unit_id
 brand
 status
+created_at
+updated_at
 ```
 
-Brand remains a single field.
+---
 
-### Product Search
+# Product and Unit Design
 
-Product search supports:
+The current application does **not** use a product-level unit to determine the billing unit.
 
-- English product names
+A product represents the item itself:
+
+```text
+Product
+├── English/transliterated name
+├── Hindi name
+├── Category
+└── Brand
+```
+
+A billing line contains the selected unit:
+
+```text
+Billing Item
+├── Product
+├── Quantity
+├── Unit
+├── Rate
+└── Final Price
+```
+
+Therefore, the frontend does not assign a unit when creating/editing a product.
+
+The billing screen selects the unit independently for each billing item.
+
+The database still contains `products.unit_id` because it exists in the current schema, but the current catalogue leaves it `NULL` and billing does not depend on it.
+
+---
+
+# Database Setup
+
+Create a PostgreSQL database and configure the connection in `.env`.
+
+Example:
+
+```env
+PORT=5001
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=pos_billing
+DB_USER=postgres
+DB_PASSWORD=your_password
+```
+
+Use the actual environment variable names expected by `src/config/database.js`.
+
+---
+
+# Migrations
+
+Schema migrations:
+
+```text
+001_create_user.sql
+002_create_sessions.sql
+003_create_password_reset_token.sql
+004_create_email_otp_challenges.sql
+005_create_product_management.sql
+006_add_bilingual_names.sql
+```
+
+Seed scripts:
+
+```text
+007_seed_bihar_hardware_catalogue.sql
+008_seed_units.sql
+```
+
+## Recommended Development Setup Order
+
+1. Create the PostgreSQL database.
+2. Run migrations `001` through `006`.
+3. Run `008_seed_units.sql`.
+4. Run `007_seed_bihar_hardware_catalogue.sql`.
+5. Seed the admin user with `seedAdmin.js`.
+
+### Important
+
+`007_seed_bihar_hardware_catalogue.sql` is a development catalogue replacement seed.
+
+It replaces the existing product catalogue and should **not** be run against a production database containing real billing/product data.
+
+---
+
+# Hardware Catalogue
+
+The current Bihar hardware/building-material catalogue contains:
+
+**1,060 products**
+
+The catalogue contains:
+
+- English/transliterated product names
 - Hindi product names
-- Brand names
+- Categories
+- Product sizes embedded directly in the product name
 
 Examples:
 
-```http
-GET /api/products?search=cement
+```text
+Hathodi
+हथौड़ी
+
+Cement (50 kg)
+सीमेंट (50 kg)
+
+TMT Bar (12 mm)
+टीएमटी बार (12 mm)
 ```
 
-```http
-GET /api/products?search=सीमेंट
-```
-
-### Category Filtering
-
-```http
-GET /api/products?categoryId=1
-```
-
-### Soft Deletion
-
-Delete operations do not physically remove products, categories, or units.
-
-Instead, the resource status is changed to:
+## Catalogue Naming
 
 ```text
-inactive
+Product Name (English) / Transliteration
+        ↓
+products.name_en
+
+Product Name (Local/Hindi)
+        ↓
+products.name_hi
 ```
 
-## Security
+The Roman/transliterated name is stored in `name_en`.
 
-### Passwords
+The Hindi name is stored in `name_hi`.
 
-Passwords are never stored as plaintext. They are hashed using Argon2.
+There is no separate product size field. Sizes remain part of the product name.
 
-### Sessions
+## Packing / Unit
 
-The application uses server-side sessions. The browser receives the session token through an HttpOnly cookie. The database stores a SHA-256 hash of the session token.
+The catalogue source contained a `Packing/Unit` column.
 
-### OTPs
+That value is intentionally **not** stored as the product's unit.
 
-OTP codes:
+The current application selects units at the billing-line level.
 
-- Use cryptographically secure random generation.
-- Are 6 digits.
-- Are never stored as plaintext.
-- Are stored as HMAC-SHA256 hashes.
-- Expire after the configured timeout.
-- Have a maximum verification-attempt limit.
-- Have a resend cooldown.
+Example:
 
-### Reset tokens
+```text
+Product: Cement (50 kg)
+Quantity: 2
+Unit: Bag
+Rate: 420
+Final Price: 840
+```
 
-Reset tokens:
+---
 
-- Use cryptographically secure random bytes.
-- Are never stored as plaintext.
-- Are stored as SHA-256 hashes.
-- Expire after a configured period.
-- Are single-use.
+# Units
 
-### Session invalidation
+Units are managed independently from products.
 
-After a successful password reset, all existing sessions for that user are deleted.
+Examples include:
 
-### Authorization
+```text
+kg
+gm
+bag
+liter
+bundle
+packet
+carton
+piece
+```
 
-Product, category, and unit modifications require administrator authorization.
+Each unit can contain:
 
-## Email
+```text
+English name
+Hindi name
+Short name
+Type
+Status
+```
 
-Password-reset OTP emails are sent using Nodemailer and SMTP.
+The billing screen allows the user to select the appropriate unit for each billing item.
 
-For Gmail:
+---
+
+# Environment Variables
+
+Create a `.env` file in the backend project.
+
+Typical configuration includes:
 
 ```env
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=465
-SMTP_SECURE=true
-SMTP_USER=yourgmail@gmail.com
-SMTP_PASSWORD=your_app_password
-```
+PORT=5001
 
-TLS certificate validation remains enabled.
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=pos_billing
+DB_USER=postgres
+DB_PASSWORD=your_password
 
-## Error Codes
+SESSION_SECRET=your_session_secret
 
-Authentication errors use structured codes such as:
-
-```text
-EMAIL_ALREADY_EXISTS
-PHONE_ALREADY_EXISTS
-INVALID_CREDENTIALS
-ACCOUNT_DISABLED
-UNAUTHORIZED
-FORBIDDEN
-INVALID_OTP
-OTP_EXPIRED
-OTP_MAX_ATTEMPTS
-OTP_COOLDOWN
-INVALID_RESET_TOKEN
-RESET_TOKEN_EXPIRED
-RESET_TOKEN_USED
-INVALID_PASSWORD
-NETWORK_ERROR
-UNKNOWN_ERROR
-```
-
-Product management also uses structured errors such as:
-
-```text
-PRODUCT_NOT_FOUND
-PRODUCT_ID_INVALID
-PRODUCT_NAME_EN_REQUIRED
-PRODUCT_NAME_EN_INVALID
-PRODUCT_NAME_HI_INVALID
-CATEGORY_NOT_FOUND
-CATEGORY_ID_INVALID
-UNIT_NOT_FOUND
-UNIT_ID_INVALID
-BRAND_INVALID
-STATUS_INVALID
-DUPLICATE_RESOURCE
-INVALID_REFERENCE
-```
-
-## CORS
-
-Local development:
-
-```env
 FRONTEND_URL=http://localhost:5173
 ```
 
-For production, set this to the actual frontend origin.
+Email configuration is also required for email/password-reset functionality.
 
-## Testing with cURL
+Use the variable names expected by the current backend configuration.
 
-### Authentication
+Do not commit `.env` or other secrets to Git.
 
-Request OTP:
+---
 
-```bash
-curl -X POST http://localhost:5001/api/auth/password-reset/request \
-  -H "Content-Type: application/json" \
-  -d '{"email":"admin@example.com"}'
+# Admin User
+
+The project includes:
+
+```text
+src/db/seedAdmin.js
 ```
 
-Verify OTP:
+Use this script to create the initial administrator account during development/setup.
+
+The admin role is required for:
+
+- Creating products
+- Updating products
+- Deleting products
+- Creating categories
+- Updating categories
+- Deleting categories
+- Creating units
+- Updating units
+- Deleting units
+
+---
+
+# Running the Backend
+
+Install dependencies:
 
 ```bash
-curl -X POST http://localhost:5001/api/auth/password-reset/verify \
-  -H "Content-Type: application/json" \
-  -d '{"email":"admin@example.com","otp":"123456"}'
+npm install
 ```
 
-Confirm password reset:
-
-```bash
-curl -X POST http://localhost:5001/api/auth/password-reset/confirm \
-  -H "Content-Type: application/json" \
-  -d '{"resetToken":"YOUR_RESET_TOKEN","newPassword":"NewPassword@123"}'
-```
-
-Never commit real passwords, OTPs, reset tokens, SMTP credentials, or other secrets.
-
-## NPM Scripts
+Start the development server:
 
 ```bash
 npm run dev
-npm start
-npm run seed:admin
 ```
 
-## Authentication Architecture
+The backend runs on:
+
+```text
+http://localhost:5001
+```
+
+The API base URL is:
+
+```text
+http://localhost:5001/api
+```
+
+---
+
+# Authentication
+
+Authentication uses server-side sessions.
+
+The frontend sends requests with credentials enabled:
+
+```js
+fetch(url, {
+  credentials: "include",
+});
+```
+
+The application does not use a frontend-managed Bearer/JWT token for normal authentication.
+
+## Authentication API
+
+The backend provides endpoints for:
+
+- Registration
+- Login
+- Logout
+- Current authenticated user
+- Password reset
+- OTP/email verification where applicable
+
+---
+
+# Product API
+
+Base path:
+
+```text
+/api/products
+```
+
+## Get Products
+
+```http
+GET /api/products
+```
+
+Authentication is required.
+
+## Get One Product
+
+```http
+GET /api/products/:id
+```
+
+Authentication is required.
+
+## Create Product
+
+```http
+POST /api/products
+```
+
+Admin authentication is required.
+
+Current product data:
+
+```json
+{
+  "nameEn": "Hathodi",
+  "nameHi": "हथौड़ी",
+  "categoryId": 1,
+  "brand": null,
+  "status": "active"
+}
+```
+
+The frontend does not send a product-level `unitId`.
+
+## Update Product
+
+```http
+PATCH /api/products/:id
+```
+
+Admin authentication is required.
+
+## Delete Product
+
+```http
+DELETE /api/products/:id
+```
+
+Admin authentication is required.
+
+Product deletion uses the application's status/soft-delete design.
+
+---
+
+# Product Search
+
+The product API supports search/filtering used by the billing and product-management screens.
+
+The frontend can search by:
+
+- English/transliterated name
+- Hindi name
+- Brand
+- Category
+
+---
+
+# Category API
+
+Base path:
+
+```text
+/api/categories
+```
+
+Endpoints:
+
+```http
+GET    /api/categories
+POST   /api/categories
+PATCH  /api/categories/:id
+DELETE /api/categories/:id
+```
+
+Authentication is required.
+
+Management operations require admin authorization.
+
+Categories contain:
+
+```text
+name_en
+name_hi
+status
+```
+
+---
+
+# Unit API
+
+Base path:
+
+```text
+/api/units
+```
+
+Endpoints:
+
+```http
+GET    /api/units
+POST   /api/units
+PATCH  /api/units/:id
+DELETE /api/units/:id
+```
+
+Authentication is required.
+
+Management operations require admin authorization.
+
+Unit data contains:
+
+```text
+name_en
+name_hi
+short_name
+type
+status
+```
+
+The frontend normally requests active units for billing.
+
+---
+
+# Product Status
+
+Products support status-based management.
+
+Typical values include:
+
+```text
+active
+inactive
+```
+
+Soft deletion allows records to remain in the database while being removed from normal active results.
+
+The same status-based approach is used for categories and units.
+
+---
+
+# Security
+
+The backend includes:
+
+- Password hashing
+- Session-based authentication
+- Admin authorization
+- Protected API routes
+- Environment-based secrets
+- CORS restrictions
+- Parameterized PostgreSQL queries
+- Password reset token handling
+- Email/OTP security flows
+
+Never commit credentials, database passwords, session secrets, email passwords, or API keys.
+
+---
+
+# CORS
+
+Development frontend:
+
+```text
+http://localhost:5173
+```
+
+Backend:
+
+```text
+http://localhost:5001
+```
+
+Because authentication uses cookies/sessions, requests must be configured with credentials where required.
+
+---
+
+# Error Handling
+
+The API returns structured HTTP responses for common cases:
+
+```text
+400 Bad Request
+401 Unauthorized
+403 Forbidden
+404 Not Found
+409 Conflict
+500 Internal Server Error
+```
+
+---
+
+# Example API Request
+
+Example login request:
+
+```bash
+curl -X POST http://localhost:5001/api/auth/login   -H "Content-Type: application/json"   -d '{
+    "email": "admin@example.com",
+    "password": "your-password"
+  }'
+```
+
+Example product request:
+
+```bash
+curl -X GET "http://localhost:5001/api/products"   -H "Content-Type: application/json"
+```
+
+For session-authenticated requests, the session cookie must be preserved.
+
+---
+
+# NPM Scripts
+
+Check `package.json` for the exact available scripts.
+
+Typical commands:
+
+```bash
+npm install
+npm run dev
+```
+
+Additional scripts may be available for:
+
+- Production start
+- Database/seed setup
+- Admin creation
+- Testing
+- Linting
+
+---
+
+# Application Architecture
 
 ```text
 React + Vite Frontend
         │
-        │ HTTP / JSON
+        │ HTTP / Session Cookie
         ▼
 Express API
         │
-        ├── Controllers
-        ├── Auth Service
-        ├── Session Service
-        ├── OTP Service
-        ├── Email Service
-        ├── Product Service
-        ├── Category Service
-        ├── Unit Service
-        └── Authentication Middleware
-        │
-        ▼
-PostgreSQL
-        ├── users
-        ├── sessions
-        ├── email_otp_challenges
-        ├── password_reset_tokens
-        ├── categories
-        ├── units
-        └── products
-```
-
-## Product Management Architecture
-
-```text
-React + Vite Frontend
-        │
-        │ HTTP / JSON
-        ▼
-Express API
-        │
+        ├── Authentication
+        ├── Authorization
         ├── Product Controller
-        ├── Product Service
         ├── Category Controller
-        ├── Category Service
-        ├── Unit Controller
-        └── Unit Service
+        └── Unit Controller
         │
         ▼
 PostgreSQL
-        ├── categories
-        ├── units
-        └── products
 ```
 
-## Current Status
+## Product Flow
 
-### Authentication
+```text
+Product Management
+        │
+        ▼
+Product API
+        │
+        ▼
+PostgreSQL products table
+```
 
-- [x] User signup
-- [x] Admin seeding
-- [x] Argon2 password hashing
-- [x] Login
-- [x] Server-side sessions
-- [x] HttpOnly session cookies
-- [x] Authenticated user endpoint
-- [x] Logout
-- [x] Change password
-- [x] Email password-reset request
-- [x] Secure OTP generation
-- [x] OTP HMAC hashing
-- [x] OTP expiry
-- [x] OTP attempt limit
-- [x] OTP resend cooldown
-- [x] OTP verification
-- [x] Secure password-reset tokens
-- [x] Password reset
-- [x] Session invalidation after password reset
+## Billing Flow
 
-### Product Management
+```text
+Product Search
+      │
+      ▼
+Select Product
+      │
+      ├── Quantity
+      ├── Unit
+      └── Rate
+      │
+      ▼
+Final Price = Quantity × Rate
+```
 
-- [x] Product database schema
-- [x] Category management API
-- [x] Unit management API
-- [x] Product management API
-- [x] Product search
-- [x] Category filtering
-- [x] Soft deletion
-- [x] Admin-only product management
-- [x] English/Hindi product names
-- [x] English/Hindi category names
-- [x] English/Hindi unit names
-- [x] Single ID and row for each bilingual resource
+The unit is selected for the billing item rather than being used as a fixed property of the product.
 
-### Catalogue
+---
 
-- [ ] Final product catalogue
-- [ ] Product catalogue import/seed
+# Frontend Integration
 
-The actual product catalogue will be finalized and imported separately.
+Frontend repository:
 
-## Future Production Improvements
+https://github.com/tejfaster/pos-billing
 
-- Automated database migrations
-- Expired session/OTP/token cleanup
-- API rate limiting
-- Security headers
-- Production HTTPS configuration
-- Reverse proxy/API gateway
+The frontend uses:
+
+```env
+VITE_API_URL=http://localhost:5001/api
+```
+
+The frontend is responsible for:
+
+- Billing UI
+- Product search UI
+- Product management UI
+- Category management UI
+- Unit selection UI
+- Hindi/English display
+- Theme/accessibility controls
+- Printing
+
+The backend is responsible for:
+
+- Authentication
+- Authorization
+- Persistent data
+- Product/category/unit APIs
+- PostgreSQL storage
+- Catalogue data
+- Server-side validation and security
+
+---
+
+# Current Development Status
+
+## Completed
+
+- Authentication/session system
+- Admin authorization
+- Password reset infrastructure
+- Product management API
+- Category management API
+- Unit management API
+- Bilingual product names
+- Bilingual categories/units
+- Product search/filtering
+- Soft-delete/status handling
+- Bihar hardware catalogue seed
+- 1,060 catalogue products
+- Unit seed data
+- React frontend integration
+
+## Current Product Model
+
+```text
+Product
+├── name_en
+├── name_hi
+├── category_id
+├── brand
+└── status
+```
+
+## Current Billing Model
+
+```text
+Billing Item
+├── product
+├── quantity
+├── unit
+├── rate
+└── final price
+```
+
+---
+
+# Future Improvements
+
+Potential future work includes:
+
+- Production-grade migration/version tracking
 - Automated tests
-- Production logging and monitoring
-- Backup and recovery strategy
-- Production deployment
+- API validation schemas
+- Request logging
+- Rate limiting
+- Improved audit logging
+- Backup/restore strategy
+- Production deployment configuration
+- Database monitoring
+- More granular permissions
+- Billing/invoice persistence
+- Customer management
+- Sales history
+- Reporting
+- Inventory management
 
-## License
+---
 
-This project is currently under development.
+# Development Git Workflow
+
+The project uses feature branches.
+
+Recommended flow:
+
+```text
+main
+  │
+  ▼
+dev
+  │
+  ▼
+feature/*
+  │
+  ▼
+dev
+  │
+  ▼
+main
+```
+
+Example:
+
+```bash
+git checkout dev
+git pull origin dev
+
+git checkout -b feature/product-management
+```
+
+After completing and testing the feature:
+
+```bash
+git add .
+git commit -m "feat: update product management"
+git push -u origin feature/product-management
+```
+
+Merge the feature into `dev`, test the integration, and then merge `dev` into `main` when the release is ready.
+
+---
+
+# Development Notes
+
+This project is currently under active development.
+
+The catalogue seed is intended to establish the initial product dataset during development.
+
+Before deploying to production:
+
+- Back up the PostgreSQL database.
+- Do not run the catalogue replacement seed against production data.
+- Configure production environment variables.
+- Restrict CORS to the production frontend.
+- Use secure session configuration.
+- Configure HTTPS.
+- Set up database backups.
+- Review authentication and authorization.
+- Add appropriate monitoring and logging.
+
+---
+
+# License
+
+This project is currently a private development project.
