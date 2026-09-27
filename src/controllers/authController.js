@@ -106,28 +106,13 @@ export async function login(req, res) {
       password,
     });
 
-    res.cookie(
-      "session",
-      result.session.token,
-      {
-        httpOnly: true,
-
-        secure:
-          process.env.NODE_ENV ===
-          "production",
-
-        sameSite:
-          process.env.NODE_ENV ===
-          "production"
-            ? "none"
-            : "lax",
-
-        expires:
-          result.session.expiresAt,
-
-        path: "/",
-      }
-    );
+   res.cookie("session", result.session.token, {
+  httpOnly: true,
+  secure: true,
+  sameSite: "none",
+  expires: result.session.expiresAt,
+  path: "/",
+});
 
     return res.json({
       success: true,
@@ -191,20 +176,11 @@ export async function logout(req, res) {
     );
 
     res.clearCookie("session", {
-      httpOnly: true,
-
-      secure:
-        process.env.NODE_ENV ===
-        "production",
-
-      sameSite:
-        process.env.NODE_ENV ===
-        "production"
-          ? "none"
-          : "lax",
-
-      path: "/",
-    });
+  httpOnly: true,
+  secure: true,
+  sameSite: "none",
+  path: "/",
+});
 
     return res.json({
       success: true,
