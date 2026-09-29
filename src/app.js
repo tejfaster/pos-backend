@@ -8,7 +8,7 @@ import authRoutes from "./routes/authRoutes.js";
 import productRoutes from "./routes/productRoutes.js";
 import categoryRoutes from "./routes/categoryRoutes.js";
 import unitRoutes from "./routes/unitRoutes.js";
-
+import syncRoutes from "./routes/syncRoutes.js";
 
 dotenv.config();
 
@@ -30,6 +30,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/categories", categoryRoutes);
 app.use("/api/units", unitRoutes);
+app.use("/api/sync", syncRoutes);
 
 app.get("/api/health", async (req, res) => {
   try {
