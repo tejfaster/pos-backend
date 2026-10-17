@@ -1,0 +1,2 @@
+ALTER TABLE users
+ADD COLUMN bill_prefix VARCHAR(10);

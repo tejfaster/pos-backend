@@ -66,18 +66,39 @@ function validateNewPassword(password) {
   }
 }
 
+function validateBillPrefix(billPrefix) {
+  if (
+    typeof billPrefix !== "string" ||
+    !/^[A-Z]{3}$/.test(billPrefix.trim().toUpperCase())
+  ) {
+    const error = new Error(
+      "Bill prefix must contain exactly 3 uppercase letters."
+    );
+
+    error.code = "INVALID_BILL_PREFIX";
+
+    throw error;
+  }
+
+  return billPrefix.trim().toUpperCase();
+}
+
 export async function signupUser({
   firstName,
   lastName,
   phone,
   email,
   password,
+  billPrefix,
 }) {
   const normalizedEmail =
     email.trim().toLowerCase();
 
   const normalizedPhone =
     phone.trim();
+
+  const normalizedBillPrefix =
+    validateBillPrefix(billPrefix);
 
   const existingEmail = await query(
     `
@@ -121,6 +142,27 @@ export async function signupUser({
     throw error;
   }
 
+  const existingBillPrefix = await query(
+    `
+      SELECT id
+      FROM users
+      WHERE bill_prefix = $1
+      LIMIT 1
+    `,
+    [normalizedBillPrefix]
+  );
+
+  if (existingBillPrefix.rows.length > 0) {
+    const error = new Error(
+      "This bill prefix is already in use."
+    );
+
+    error.code =
+      "BILL_PREFIX_ALREADY_EXISTS";
+
+    throw error;
+  }
+
   validateNewPassword(password);
 
   const passwordHash =
@@ -135,7 +177,8 @@ export async function signupUser({
         email,
         password_hash,
         role,
-        status
+        status,
+        bill_prefix
       )
       VALUES (
         $1,
@@ -144,7 +187,8 @@ export async function signupUser({
         $4,
         $5,
         'user',
-        'active'
+        'active',
+        $6
       )
       RETURNING
         id,
@@ -154,6 +198,7 @@ export async function signupUser({
         email,
         role,
         status,
+        bill_prefix,
         created_at
     `,
     [
@@ -162,6 +207,7 @@ export async function signupUser({
       normalizedPhone,
       normalizedEmail,
       passwordHash,
+      normalizedBillPrefix,
     ]
   );
 
@@ -186,6 +232,7 @@ export async function loginUser({
         password_hash,
         role,
         status,
+        bill_prefix,
         created_at
       FROM users
       WHERE LOWER(email) = $1
@@ -247,6 +294,7 @@ export async function loginUser({
       email: user.email,
       role: user.role,
       status: user.status,
+      bill_prefix: user.bill_prefix,
       created_at: user.created_at,
     },
     session,
@@ -407,47 +455,80 @@ export async function findActiveUserByEmail(
   return result.rows[0];
 }
 
-export async function resetUserPassword({ resetToken, newPassword }) {
-  if (typeof resetToken !== "string" || !resetToken.trim()) {
-    const error = new Error("Invalid or expired password reset link.");
+export async function resetUserPassword({
+  resetToken,
+  newPassword,
+}) {
+  if (
+    typeof resetToken !== "string" ||
+    !resetToken.trim()
+  ) {
+    const error = new Error(
+      "Invalid or expired password reset link."
+    );
+
     error.code = "INVALID_RESET_TOKEN";
+
     throw error;
   }
 
   if (typeof newPassword !== "string") {
-    const error = new Error("Invalid password.");
+    const error = new Error(
+      "Invalid password."
+    );
+
     error.code = "INVALID_PASSWORD";
+
     throw error;
   }
 
-  // Backend must enforce the password policy independently
   if (newPassword.length < 8) {
-    const error = new Error("Password must be at least 8 characters.");
+    const error = new Error(
+      "Password must be at least 8 characters."
+    );
+
     error.code = "INVALID_PASSWORD";
+
     throw error;
   }
 
   if (!/[A-Z]/.test(newPassword)) {
-    const error = new Error("Password must contain an uppercase letter.");
+    const error = new Error(
+      "Password must contain an uppercase letter."
+    );
+
     error.code = "INVALID_PASSWORD";
+
     throw error;
   }
 
   if (!/[a-z]/.test(newPassword)) {
-    const error = new Error("Password must contain a lowercase letter.");
+    const error = new Error(
+      "Password must contain a lowercase letter."
+    );
+
     error.code = "INVALID_PASSWORD";
+
     throw error;
   }
 
   if (!/[0-9]/.test(newPassword)) {
-    const error = new Error("Password must contain a number.");
+    const error = new Error(
+      "Password must contain a number."
+    );
+
     error.code = "INVALID_PASSWORD";
+
     throw error;
   }
 
   if (!/[^A-Za-z0-9]/.test(newPassword)) {
-    const error = new Error("Password must contain a special character.");
+    const error = new Error(
+      "Password must contain a special character."
+    );
+
     error.code = "INVALID_PASSWORD";
+
     throw error;
   }
 
@@ -456,69 +537,97 @@ export async function resetUserPassword({ resetToken, newPassword }) {
     .update(resetToken.trim())
     .digest("hex");
 
-  // Hash the password before opening the DB transaction.
-  const passwordHash = await argon2.hash(newPassword);
+  const passwordHash =
+    await argon2.hash(newPassword);
 
   const client = await pool.connect();
 
   try {
     await client.query("BEGIN");
 
-    const tokenResult = await client.query(
-      `
-        SELECT
-          prt.id,
-          prt.user_id,
-          prt.expires_at,
-          prt.used_at,
-          u.status
-        FROM password_reset_tokens prt
-        INNER JOIN users u ON u.id = prt.user_id
-        WHERE prt.token_hash = $1
-        FOR UPDATE
-      `,
-      [tokenHash]
-    );
+    const tokenResult =
+      await client.query(
+        `
+          SELECT
+            prt.id,
+            prt.user_id,
+            prt.expires_at,
+            prt.used_at,
+            u.status
+          FROM password_reset_tokens prt
+          INNER JOIN users u
+            ON u.id = prt.user_id
+          WHERE prt.token_hash = $1
+          FOR UPDATE
+        `,
+        [tokenHash]
+      );
 
     if (!tokenResult.rows.length) {
-      const error = new Error("Invalid or expired password reset link.");
-      error.code = "INVALID_RESET_TOKEN";
+      const error = new Error(
+        "Invalid or expired password reset link."
+      );
+
+      error.code =
+        "INVALID_RESET_TOKEN";
+
       throw error;
     }
 
-    const resetRecord = tokenResult.rows[0];
+    const resetRecord =
+      tokenResult.rows[0];
 
     if (resetRecord.used_at) {
-      const error = new Error("This password reset link has already been used.");
-      error.code = "RESET_TOKEN_USED";
+      const error = new Error(
+        "This password reset link has already been used."
+      );
+
+      error.code =
+        "RESET_TOKEN_USED";
+
       throw error;
     }
 
-    if (new Date(resetRecord.expires_at).getTime() <= Date.now()) {
-      const error = new Error("This password reset link has expired.");
-      error.code = "RESET_TOKEN_EXPIRED";
+    if (
+      new Date(
+        resetRecord.expires_at
+      ).getTime() <= Date.now()
+    ) {
+      const error = new Error(
+        "This password reset link has expired."
+      );
+
+      error.code =
+        "RESET_TOKEN_EXPIRED";
+
       throw error;
     }
 
-    if (resetRecord.status === "disabled") {
+    if (
+      resetRecord.status === "disabled"
+    ) {
       const error = new Error(
         "Your account has been disabled. Please contact an administrator."
       );
-      error.code = "ACCOUNT_DISABLED";
+
+      error.code =
+        "ACCOUNT_DISABLED";
+
       throw error;
     }
 
-    // Update password.
     await client.query(
       `
         UPDATE users
         SET password_hash = $1
         WHERE id = $2
       `,
-      [passwordHash, resetRecord.user_id]
+      [
+        passwordHash,
+        resetRecord.user_id,
+      ]
     );
 
-    // Make the reset token one-time use.
     await client.query(
       `
         UPDATE password_reset_tokens
@@ -528,7 +637,6 @@ export async function resetUserPassword({ resetToken, newPassword }) {
       [resetRecord.id]
     );
 
-    // Invalidate every existing login session.
     await client.query(
       `
         DELETE FROM sessions
@@ -537,7 +645,6 @@ export async function resetUserPassword({ resetToken, newPassword }) {
       [resetRecord.user_id]
     );
 
-    // Also invalidate any remaining OTP challenges.
     await client.query(
       `
         UPDATE email_otp_challenges
