@@ -11,7 +11,6 @@ function hashToken(token) {
 
 export async function createSession(userId) {
   const token = crypto.randomBytes(32).toString("hex");
-
   const tokenHash = hashToken(token);
 
   const durationDays = Number(
@@ -59,6 +58,7 @@ export async function getUserFromSession(token) {
         u.email,
         u.role,
         u.status,
+        u.bill_prefix,
         u.created_at
       FROM sessions s
       INNER JOIN users u
@@ -91,7 +91,7 @@ export async function deleteSession(token) {
     `,
     [tokenHash]
   );
-} 
+}
 
 export async function deleteOtherSessions(
   userId,

@@ -27,6 +27,7 @@ export async function signup(req, res) {
     const {
       firstName,
       lastName,
+      billPrefix,
       phone,
       email,
       password,
@@ -35,6 +36,7 @@ export async function signup(req, res) {
     const user = await signupUser({
       firstName,
       lastName,
+      billPrefix,
       phone,
       email,
       password,
@@ -76,6 +78,29 @@ export async function signup(req, res) {
 
     if (
       error.code ===
+      "BILL_PREFIX_ALREADY_EXISTS"
+    ) {
+      return res.status(409).json({
+        success: false,
+        code: error.code,
+        message:
+          "Bill prefix is already in use.",
+      });
+    }
+
+    if (
+      error.code ===
+      "INVALID_BILL_PREFIX"
+    ) {
+      return res.status(400).json({
+        success: false,
+        code: error.code,
+        message: error.message,
+      });
+    }
+
+    if (
+      error.code ===
       "INVALID_NEW_PASSWORD"
     ) {
       return res.status(400).json({
@@ -106,13 +131,13 @@ export async function login(req, res) {
       password,
     });
 
-   res.cookie("session", result.session.token, {
-  httpOnly: true,
-  secure: true,
-  sameSite: "none",
-  expires: result.session.expiresAt,
-  path: "/",
-});
+    res.cookie("session", result.session.token, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "none",
+      expires: result.session.expiresAt,
+      path: "/",
+    });
 
     return res.json({
       success: true,
@@ -176,11 +201,11 @@ export async function logout(req, res) {
     );
 
     res.clearCookie("session", {
-  httpOnly: true,
-  secure: true,
-  sameSite: "none",
-  path: "/",
-});
+      httpOnly: true,
+      secure: true,
+      sameSite: "none",
+      path: "/",
+    });
 
     return res.json({
       success: true,
@@ -435,7 +460,10 @@ export async function requestPasswordReset(
   }
 }
 
-export async function verifyPasswordResetOtp(req, res) {
+export async function verifyPasswordResetOtp(
+  req,
+  res
+) {
   try {
     const { email, otp } = req.body;
 
@@ -448,30 +476,41 @@ export async function verifyPasswordResetOtp(req, res) {
       return res.status(400).json({
         success: false,
         code: "INVALID_OTP",
-        message: "Invalid verification code.",
+        message:
+          "Invalid verification code.",
       });
     }
 
-    const result = await verifyOtpChallenge({
-      email,
-      otp: otp.trim(),
-      purpose: "PASSWORD_RESET",
-    });
+    const result =
+      await verifyOtpChallenge({
+        email,
+        otp: otp.trim(),
+        purpose:
+          "PASSWORD_RESET",
+      });
 
     return res.json({
       success: true,
-      message: "Verification code verified successfully.",
-      resetToken: result.resetToken,
-      expiresAt: result.expiresAt,
+      message:
+        "Verification code verified successfully.",
+      resetToken:
+        result.resetToken,
+      expiresAt:
+        result.expiresAt,
     });
   } catch (error) {
-    console.error("Password reset OTP verification error:", error);
+    console.error(
+      "Password reset OTP verification error:",
+      error
+    );
 
     if (
       error.code === "INVALID_OTP" ||
       error.code === "OTP_EXPIRED" ||
-      error.code === "OTP_ALREADY_VERIFIED" ||
-      error.code === "OTP_MAX_ATTEMPTS"
+      error.code ===
+        "OTP_ALREADY_VERIFIED" ||
+      error.code ===
+        "OTP_MAX_ATTEMPTS"
     ) {
       return res.status(400).json({
         success: false,
@@ -483,14 +522,21 @@ export async function verifyPasswordResetOtp(req, res) {
     return res.status(500).json({
       success: false,
       code: "UNKNOWN_ERROR",
-      message: "Something went wrong. Please try again.",
+      message:
+        "Something went wrong. Please try again.",
     });
   }
 }
 
-export async function confirmPasswordReset(req, res) {
+export async function confirmPasswordReset(
+  req,
+  res
+) {
   try {
-    const { resetToken, newPassword } = req.body;
+    const {
+      resetToken,
+      newPassword,
+    } = req.body;
 
     if (
       typeof resetToken !== "string" ||
@@ -500,7 +546,8 @@ export async function confirmPasswordReset(req, res) {
       return res.status(400).json({
         success: false,
         code: "INVALID_REQUEST",
-        message: "Invalid password reset request.",
+        message:
+          "Invalid password reset request.",
       });
     }
 
@@ -511,15 +558,22 @@ export async function confirmPasswordReset(req, res) {
 
     return res.json({
       success: true,
-      message: "Your password has been reset successfully.",
+      message:
+        "Your password has been reset successfully.",
     });
   } catch (error) {
-    console.error("Password reset confirmation error:", error);
+    console.error(
+      "Password reset confirmation error:",
+      error
+    );
 
     if (
-      error.code === "INVALID_RESET_TOKEN" ||
-      error.code === "RESET_TOKEN_USED" ||
-      error.code === "RESET_TOKEN_EXPIRED"
+      error.code ===
+        "INVALID_RESET_TOKEN" ||
+      error.code ===
+        "RESET_TOKEN_USED" ||
+      error.code ===
+        "RESET_TOKEN_EXPIRED"
     ) {
       return res.status(400).json({
         success: false,
@@ -528,7 +582,10 @@ export async function confirmPasswordReset(req, res) {
       });
     }
 
-    if (error.code === "INVALID_PASSWORD") {
+    if (
+      error.code ===
+      "INVALID_PASSWORD"
+    ) {
       return res.status(400).json({
         success: false,
         code: error.code,
@@ -536,7 +593,10 @@ export async function confirmPasswordReset(req, res) {
       });
     }
 
-    if (error.code === "ACCOUNT_DISABLED") {
+    if (
+      error.code ===
+      "ACCOUNT_DISABLED"
+    ) {
       return res.status(403).json({
         success: false,
         code: error.code,
@@ -547,7 +607,8 @@ export async function confirmPasswordReset(req, res) {
     return res.status(500).json({
       success: false,
       code: "UNKNOWN_ERROR",
-      message: "Something went wrong. Please try again.",
+      message:
+        "Something went wrong. Please try again.",
     });
   }
 }
